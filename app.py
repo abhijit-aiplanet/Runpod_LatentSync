@@ -69,6 +69,7 @@ def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
         scheduler=scheduler,
     ).to("cuda")
 
+    seed = -1
     if seed != -1:
         set_seed(seed)
     else:
