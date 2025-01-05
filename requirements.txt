@@ -27,3 +27,5 @@ face-alignment==1.4.1
 ninja==1.11.1.1
 pandas==2.0.3
 numpy==1.24.4
+pydub
+moviepy==1.0.3
