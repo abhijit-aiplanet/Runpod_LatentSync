@@ -15,6 +15,7 @@ snapshot_download(
     local_dir = "./checkpoints"  
 )
 
+import tempfile
 from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
 
