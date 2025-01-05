@@ -97,7 +97,7 @@ def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
         video_path=cropped_video_path
 
         trimmed_audio_path = process_audio(audio_path, temp_dir)
-        print(f"Processed file was stored temporarily at: {input_audio}")
+        print(f"Processed file was stored temporarily at: {trimmed_audio_path}")
         audio_path=trimmed_audio_path
 
     scheduler = DDIMScheduler.from_pretrained("configs")
