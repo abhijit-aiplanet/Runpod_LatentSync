@@ -1,6 +1,6 @@
 ---
 title: LatentSync
-emoji: 🏢
+emoji: 👄
 colorFrom: blue
 colorTo: blue
 sdk: gradio
