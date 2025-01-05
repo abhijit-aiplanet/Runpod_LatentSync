@@ -15,6 +15,58 @@ snapshot_download(
     local_dir = "./checkpoints"  
 )
 
+from moviepy.editor import VideoFileClip
+from pydub import AudioSegment
+
+def process_video(input_video_path, temp_dir="temp_dir"):
+    """
+    Crop a given MP4 video to a maximum duration of 10 seconds if it is longer than 10 seconds.
+    Save the new video in the specified folder (default is temp_dir).
+    
+    Args:
+        input_video_path (str): Path to the input video file.
+        temp_dir (str): Directory where the processed video will be saved.
+        
+    Returns:
+        str: Path to the cropped video file.
+    """
+    # Ensure the temp_dir exists
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # Load the video
+    video = VideoFileClip(input_video_path)
+    
+    # Determine the output path
+    input_file_name = os.path.basename(input_video_path)
+    output_video_path = os.path.join(temp_dir, f"cropped_{input_file_name}")
+    
+    # Crop the video to 10 seconds if necessary
+    if video.duration > 10:
+        video = video.subclip(0, 10)
+    
+    # Write the cropped video to the output path
+    video.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
+    
+    # Return the path to the cropped video
+    return output_video_path
+
+def process_audio(file_path, temp_dir):
+    # Load the audio file
+    audio = AudioSegment.from_file(file_path)
+    
+    # Check and cut the audio if longer than 4 seconds
+    max_duration = 8 * 1000  # 4 seconds in milliseconds
+    if len(audio) > max_duration:
+        audio = audio[:max_duration]
+    
+    # Save the processed audio in the temporary directory
+    output_path = os.path.join(temp_dir, "trimmed_audio.wav")
+    audio.export(output_path, format="wav")
+    
+    # Return the path to the trimmed file
+    print(f"Processed audio saved at: {output_path}")
+    return output_path
+
 import argparse
 from omegaconf import OmegaConf
 import torch
@@ -34,6 +86,18 @@ def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
     print(f"Input video path: {video_path}")
     print(f"Input audio path: {audio_path}")
     print(f"Loaded checkpoint path: {inference_ckpt_path}")
+
+    is_shared_ui = True if "fffiloni/LatentSync" in os.environ['SPACE_ID'] else False
+    temp_dir = None
+    if is_shared_ui:
+        temp_dir = tempfile.mkdtemp()
+        cropped_video_path = process_video(video_path)
+        print(f"Cropped video saved to: {cropped_video_path}")
+        video_path=cropped_video_path
+
+        trimmed_audio_path = process_audio(audio_path, temp_dir)
+        print(f"Processed file was stored temporarily at: {input_audio}")
+        audio_path=trimmed_audio_path
 
     scheduler = DDIMScheduler.from_pretrained("configs")
 
@@ -92,6 +156,12 @@ def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
         width=config.data.resolution,
         height=config.data.resolution,
     )
+
+    if is_shared_ui:
+        # Clean up the temporary directory
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+            print(f"Temporary directory {temp_dir} deleted.")
 
     return video_out_path
 
