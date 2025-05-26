@@ -1,4 +1,5 @@
 import gradio as gr
+import spaces
 import os
 import sys
 import shutil
@@ -79,6 +80,7 @@ from accelerate.utils import set_seed
 from latentsync.whisper.audio2feature import Audio2Feature
 
 
+@spaces.GPU(duration=180)
 def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
     inference_ckpt_path = "checkpoints/latentsync_unet.pt"
     unet_config_path = "configs/unet/second_stage.yaml"
@@ -218,4 +220,4 @@ with gr.Blocks(css=css) as demo:
         outputs = [video_result]
     )
 
-demo.queue().launch(show_api=False, show_error=True)
+demo.queue().launch(show_api=True, show_error=True, mcp_server=True)
