@@ -82,6 +82,22 @@ from latentsync.whisper.audio2feature import Audio2Feature
 
 @spaces.GPU(duration=180)
 def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
+    """
+    Perform lip-sync video generation using an input video and a separate audio track.
+    
+    This function takes an input video (usually a person speaking) and an audio file,
+    and synchronizes the video frames so that the lips of the speaker match the audio content.
+    It uses a latent diffusion model-based pipeline (LatentSync) for audio-conditioned lip synchronization.
+    
+    Args:
+        video_path (str): File path to the input video in MP4 format.
+        audio_path (str): File path to the input audio file (e.g., WAV or MP3).
+        progress (gr.Progress, optional): Gradio progress tracker for UI feedback (auto-injected).
+        
+    Returns:
+        str: File path to the generated output video with lip synchronization applied.
+    """
+    
     inference_ckpt_path = "checkpoints/latentsync_unet.pt"
     unet_config_path = "configs/unet/second_stage.yaml"
     config = OmegaConf.load(unet_config_path)
