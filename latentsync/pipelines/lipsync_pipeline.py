@@ -15,7 +15,7 @@ from packaging import version
 
 from diffusers.configuration_utils import FrozenDict
 from diffusers.models import AutoencoderKL
-from diffusers.pipeline_utils import DiffusionPipeline
+from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.schedulers import (
     DDIMScheduler,
     DPMSolverMultistepScheduler,
