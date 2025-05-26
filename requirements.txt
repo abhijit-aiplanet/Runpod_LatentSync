@@ -30,3 +30,4 @@ numpy==1.24.4
 pydub
 moviepy==1.0.3
 spaces
+gradio[mcp]
