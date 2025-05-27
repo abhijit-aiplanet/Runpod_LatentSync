@@ -1,7 +1,7 @@
 torch==2.5.1
 torchvision==0.20.1
 --extra-index-url https://download.pytorch.org/whl/cu121
-xformers==0.0.29.post3
+xformers==0.0.29.post2
 triton==3.1.0
 
 diffusers==0.33.1
