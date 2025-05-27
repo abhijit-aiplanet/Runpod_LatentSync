@@ -236,4 +236,4 @@ with gr.Blocks(css=css) as demo:
         outputs = [video_result]
     )
 
-demo.queue().launch(show_api=True, show_error=True, mcp_server=True)
+demo.queue().launch(show_api=True, show_error=True, ssr_mode=False, mcp_server=True)
