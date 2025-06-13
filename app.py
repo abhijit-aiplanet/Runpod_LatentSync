@@ -142,10 +142,10 @@ def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
     unet = unet.to(dtype=torch.float16)
 
     # set xformers
-    """
+    
     if is_xformers_available():
         unet.enable_xformers_memory_efficient_attention()
-    """
+    
 
     pipeline = LipsyncPipeline(
         vae=vae,
