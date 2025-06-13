@@ -97,6 +97,8 @@ def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
     Returns:
         str: File path to the generated output video with lip synchronization applied.
     """
+
+    gr.Info("180 seconds will be used from your daily ZeroGPU time credits.")
     
     inference_ckpt_path = "checkpoints/latentsync_unet.pt"
     unet_config_path = "configs/unet/second_stage.yaml"
