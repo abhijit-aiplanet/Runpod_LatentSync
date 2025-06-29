@@ -4,7 +4,7 @@ emoji: 👄
 colorFrom: blue
 colorTo: blue
 sdk: gradio
-sdk_version: 5.34.2
+sdk_version: 5.35.0
 app_file: app.py
 pinned: false
 short_description: Audio Conditioned LipSync with Latent Diffusion Models
