@@ -21,34 +21,32 @@ from pydub import AudioSegment
 
 def process_video(input_video_path, temp_dir="temp_dir"):
     """
-    Crop a given MP4 video to a maximum duration of 10 seconds and ensure proper format.
+    Trim video to max 10 seconds using ffmpeg without re-encoding.
+    This avoids the 'crf' option error in minimal ffmpeg builds.
     """
-    # Ensure the temp_dir exists
     os.makedirs(temp_dir, exist_ok=True)
-    
-    # Load the video
-    video = VideoFileClip(input_video_path)
-    
-    # Determine the output path
+
+    # Determine output path
     input_file_name = os.path.basename(input_video_path)
     output_video_path = os.path.join(temp_dir, f"processed_{input_file_name}")
-    
-    # Crop the video to 10 seconds if necessary
-    if video.duration > 10:
-        video = video.subclip(0, 10)
-    
-    # Write the video with specific codec settings for compatibility
-    video.write_videofile(
-        output_video_path, 
-        codec="libx264", 
-        audio_codec="aac",
-        temp_audiofile=os.path.join(temp_dir, "temp_audio.m4a"),
-        remove_temp=True,
-        verbose=False,
-        logger=None
-    )
-    
-    video.close()  # Free memory
+
+    # Build ffmpeg command
+    cmd = [
+        "ffmpeg", "-y", "-i", input_video_path,
+        "-t", "10",            # max 10 seconds
+        "-c:v", "copy",         # no re-encode (avoids crf)
+        "-c:a", "copy",
+        output_video_path,
+    ]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        print("ffmpeg error while processing video:\n", e.stderr.decode())
+        raise RuntimeError("Video preprocessing failed")
+
+    if not os.path.exists(output_video_path):
+        raise RuntimeError("Processed video not created")
+
     return output_video_path
 
 def process_audio(file_path, temp_dir):
