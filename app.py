@@ -80,8 +80,26 @@ def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
 
     # Enable xformers for better performance on A100
     if is_xformers_available():
-        unet.enable_xformers_memory_efficient_attention()
-        print("xformers memory efficient attention enabled")
+        # Patch for custom UNet model signature mismatch
+        for name, module in unet.named_modules():
+            if hasattr(module, "set_use_memory_efficient_attention_xformers"):
+                original_method = module.set_use_memory_efficient_attention_xformers
+                
+                # Create a wrapper that handles extra arguments
+                def patched_method(self, valid, attention_op=None):
+                    return original_method(self, valid)
+                
+                # Replace the method with our patched version
+                type(module).set_use_memory_efficient_attention_xformers = patched_method
+        
+        try:
+            unet.enable_xformers_memory_efficient_attention()
+            print("✅ xformers memory efficient attention enabled with custom patch")
+        except Exception as e:
+            print(f"Failed to enable xformers: {e}")
+            print("Continuing without xformers - performance may be slower")
+    else:
+        print("xformers not available - install with: pip install xformers")
 
     pipeline = LipsyncPipeline(
         vae=vae,
