@@ -114,13 +114,40 @@ def read_audio(audio_path: str, audio_sample_rate: int = 16000):
 
 
 def write_video(video_output_path: str, video_frames: np.ndarray, fps: int):
+    print(f"write_video called with: shape={video_frames.shape}, dtype={video_frames.dtype}")
+    if len(video_frames) > 0:
+        print(f"First frame: min/max={video_frames[0].min()}/{video_frames[0].max()}")
+    
     height, width = video_frames[0].shape[:2]
     out = cv2.VideoWriter(video_output_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
     # out = cv2.VideoWriter(video_output_path, cv2.VideoWriter_fourcc(*"vp09"), fps, (width, height))
-    for frame in video_frames:
+    
+    if not out.isOpened():
+        raise RuntimeError(f"Failed to open video writer for {video_output_path}")
+    
+    for i, frame in enumerate(video_frames):
+        original_dtype = frame.dtype
+        original_range = (frame.min(), frame.max())
+        
+        # Ensure frame is in correct format for video writing
+        if frame.dtype == np.uint16:
+            # Convert uint16 to uint8 by clipping to [0, 255] range
+            frame = np.clip(frame, 0, 255).astype(np.uint8)
+        elif frame.dtype != np.uint8:
+            # Convert any other data type to uint8
+            frame = np.clip(frame * 255, 0, 255).astype(np.uint8) if frame.max() <= 1.0 else np.clip(frame, 0, 255).astype(np.uint8)
+        
+        if i == 0:  # Debug first frame
+            print(f"Frame conversion: {original_dtype} {original_range} -> {frame.dtype} ({frame.min()}, {frame.max()})")
+        
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        out.write(frame)
+        success = out.write(frame)
+        
+        if i == 0:
+            print(f"First frame write success: {success}")
+    
     out.release()
+    print(f"Video writer released. File should be at: {video_output_path}")
 
 
 def init_dist(backend="nccl", **kwargs):

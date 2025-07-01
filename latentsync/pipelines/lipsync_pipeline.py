@@ -285,7 +285,17 @@ class LipsyncPipeline(DiffusionPipeline):
             face = rearrange(face, "c h w -> h w c")
             face = (face / 2 + 0.5).clamp(0, 1)
             face = (face * 255).to(torch.uint8).cpu().numpy()
+            
+            # Debug information
+            if index == 0:  # Only print for first frame to avoid spam
+                print(f"Face before restore_img: shape={face.shape}, dtype={face.dtype}, min/max={face.min()}/{face.max()}")
+                print(f"Original frame: shape={video_frames[index].shape}, dtype={video_frames[index].dtype}")
+            
             out_frame = self.image_processor.restorer.restore_img(video_frames[index], face, affine_matrices[index])
+            
+            if index == 0:  # Only print for first frame to avoid spam
+                print(f"Frame after restore_img: shape={out_frame.shape}, dtype={out_frame.dtype}, min/max={out_frame.min()}/{out_frame.max()}")
+            
             out_frames.append(out_frame)
         return np.stack(out_frames, axis=0)
 
@@ -450,6 +460,10 @@ class LipsyncPipeline(DiffusionPipeline):
             torch.cat(masked_video_frames), original_video_frames, boxes, affine_matrices
         )
 
+        print(f"Synced video frames shape: {synced_video_frames.shape}")
+        print(f"Synced video frames dtype: {synced_video_frames.dtype}")
+        print(f"Synced video frames min/max: {synced_video_frames.min():.2f}/{synced_video_frames.max():.2f}")
+
         audio_samples_remain_length = int(synced_video_frames.shape[0] / video_fps * audio_sample_rate)
         audio_samples = audio_samples[:audio_samples_remain_length].cpu().numpy()
 
@@ -461,10 +475,18 @@ class LipsyncPipeline(DiffusionPipeline):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
 
+        print(f"Writing video with {len(synced_video_frames)} frames...")
         write_video(os.path.join(temp_dir, "video.mp4"), synced_video_frames, fps=25)
+        print(f"Video written successfully to {os.path.join(temp_dir, 'video.mp4')}")
+        
         # write_video(video_mask_path, masked_video_frames, fps=25)
 
         sf.write(os.path.join(temp_dir, "audio.wav"), audio_samples, audio_sample_rate)
 
         command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v mpeg4 -pix_fmt yuv420p -q:v 2 -c:a aac -shortest {video_out_path}"
-        subprocess.run(command, shell=True)
+        print(f"Running ffmpeg command: {command}")
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"FFmpeg error: {result.stderr}")
+            raise RuntimeError(f"FFmpeg failed: {result.stderr}")
+        print(f"Final video created: {video_out_path}")
