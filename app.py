@@ -78,14 +78,15 @@ from diffusers.utils.import_utils import is_xformers_available
 from accelerate.utils import set_seed
 from latentsync.whisper.audio2feature import Audio2Feature
 import latentsync.utils.util as ls_util
+import latentsync.pipelines.lipsync_pipeline as ls_pipe
 
 orig_read_video = ls_util.read_video
 
 def _read_video_no_change(video_path: str, change_fps=True, use_decord=True):
-    # Force change_fps=False to avoid ffmpeg -crf option which isn't supported in minimal builds
-    return orig_read_video(video_path, change_fps=False, use_decord=use_decord)
+    return orig_read_video(video_path, change_fps=False, use_decord=True)
 
 ls_util.read_video = _read_video_no_change
+ls_pipe.read_video = _read_video_no_change
 
 def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
     """
