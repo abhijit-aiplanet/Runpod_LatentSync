@@ -81,6 +81,7 @@ import latentsync.utils.util as ls_util
 import latentsync.pipelines.lipsync_pipeline as ls_pipe
 import latentsync.whisper.whisper.audio as wa
 import numpy as np
+import librosa
 
 orig_read_video = ls_util.read_video
 
@@ -90,15 +91,12 @@ def _read_video_no_change(video_path: str, change_fps=True, use_decord=True):
 ls_util.read_video = _read_video_no_change
 ls_pipe.read_video = _read_video_no_change
 
-# Patch mel_filters to allow_pickle
-_orig_mel_filters = wa.mel_filters
-
+# Patch mel_filters to generate dynamically via librosa
 def _patched_mel_filters(device, n_mels=80):
     assert n_mels == 80
-    with np.load(os.path.join(os.path.dirname(wa.__file__), "assets", "mel_filters.npz"), allow_pickle=True) as f:
-        return torch.from_numpy(f[f"mel_{n_mels}"]).to(device)
+    filter_bank = librosa.filters.mel(sr=16000, n_fft=400, n_mels=n_mels)
+    return torch.from_numpy(filter_bank).to(device)
 
-wa.mel_filters.cache_clear()
 wa.mel_filters = _patched_mel_filters
 
 def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
