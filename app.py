@@ -19,6 +19,57 @@ import tempfile
 from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
 
+def process_video(input_video_path, temp_dir="temp_dir"):
+    """
+    Crop a given MP4 video to a maximum duration of 10 seconds and ensure proper format.
+    """
+    # Ensure the temp_dir exists
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # Load the video
+    video = VideoFileClip(input_video_path)
+    
+    # Determine the output path
+    input_file_name = os.path.basename(input_video_path)
+    output_video_path = os.path.join(temp_dir, f"processed_{input_file_name}")
+    
+    # Crop the video to 10 seconds if necessary
+    if video.duration > 10:
+        video = video.subclip(0, 10)
+    
+    # Write the video with specific codec settings for compatibility
+    video.write_videofile(
+        output_video_path, 
+        codec="libx264", 
+        audio_codec="aac",
+        temp_audiofile=os.path.join(temp_dir, "temp_audio.m4a"),
+        remove_temp=True,
+        verbose=False,
+        logger=None
+    )
+    
+    video.close()  # Free memory
+    return output_video_path
+
+def process_audio(file_path, temp_dir):
+    """
+    Process audio to ensure compatibility and reasonable duration.
+    """
+    # Load the audio file
+    audio = AudioSegment.from_file(file_path)
+    
+    # Check and cut the audio if longer than 8 seconds
+    max_duration = 8 * 1000  # 8 seconds in milliseconds
+    if len(audio) > max_duration:
+        audio = audio[:max_duration]
+    
+    # Save the processed audio in the temporary directory
+    output_path = os.path.join(temp_dir, "processed_audio.wav")
+    audio.export(output_path, format="wav")
+    
+    print(f"Processed audio saved at: {output_path}")
+    return output_path
+
 import argparse
 from omegaconf import OmegaConf
 import torch
@@ -46,93 +97,123 @@ def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
     Returns:
         str: File path to the generated output video with lip synchronization applied.
     """
+    # Create temporary directory for processed files
+    temp_dir = tempfile.mkdtemp()
     
-    inference_ckpt_path = "checkpoints/latentsync_unet.pt"
-    unet_config_path = "configs/unet/second_stage.yaml"
-    config = OmegaConf.load(unet_config_path)
-    
-    print(f"Input video path: {video_path}")
-    print(f"Input audio path: {audio_path}")
-    print(f"Loaded checkpoint path: {inference_ckpt_path}")
-
-    scheduler = DDIMScheduler.from_pretrained("configs")
-
-    if config.model.cross_attention_dim == 768:
-        whisper_model_path = "checkpoints/whisper/small.pt"
-    elif config.model.cross_attention_dim == 384:
-        whisper_model_path = "checkpoints/whisper/tiny.pt"
-    else:
-        raise NotImplementedError("cross_attention_dim must be 768 or 384")
-
-    audio_encoder = Audio2Feature(model_path=whisper_model_path, device="cuda", num_frames=config.data.num_frames)
-
-    vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse", torch_dtype=torch.float16)
-    vae.config.scaling_factor = 0.18215
-    vae.config.shift_factor = 0
-
-    unet, _ = UNet3DConditionModel.from_pretrained(
-        OmegaConf.to_container(config.model),
-        inference_ckpt_path,  # load checkpoint
-        device="cpu",
-    )
-
-    unet = unet.to(dtype=torch.float16)
-
-    # Enable xformers for better performance on A100
-    if is_xformers_available():
-        # Patch for custom UNet model signature mismatch
-        for name, module in unet.named_modules():
-            if hasattr(module, "set_use_memory_efficient_attention_xformers"):
-                original_method = module.set_use_memory_efficient_attention_xformers
-                
-                # Create a wrapper that handles extra arguments
-                def patched_method(self, valid, attention_op=None):
-                    return original_method(self, valid)
-                
-                # Replace the method with our patched version
-                type(module).set_use_memory_efficient_attention_xformers = patched_method
+    try:
+        print(f"Original video path: {video_path}")
+        print(f"Original audio path: {audio_path}")
         
-        try:
-            unet.enable_xformers_memory_efficient_attention()
-            print("✅ xformers memory efficient attention enabled with custom patch")
-        except Exception as e:
-            print(f"Failed to enable xformers: {e}")
-            print("Continuing without xformers - performance may be slower")
-    else:
-        print("xformers not available - install with: pip install xformers")
+        # Process video and audio for better compatibility
+        processed_video_path = process_video(video_path, temp_dir)
+        processed_audio_path = process_audio(audio_path, temp_dir)
+        
+        print(f"Processed video path: {processed_video_path}")
+        print(f"Processed audio path: {processed_audio_path}")
+        
+        # Use processed files
+        video_path = processed_video_path
+        audio_path = processed_audio_path
+        
+        inference_ckpt_path = "checkpoints/latentsync_unet.pt"
+        unet_config_path = "configs/unet/second_stage.yaml"
+        config = OmegaConf.load(unet_config_path)
+        
+        print(f"Loaded checkpoint path: {inference_ckpt_path}")
 
-    pipeline = LipsyncPipeline(
-        vae=vae,
-        audio_encoder=audio_encoder,
-        unet=unet,
-        scheduler=scheduler,
-    ).to("cuda")
+        scheduler = DDIMScheduler.from_pretrained("configs")
 
-    seed = -1
-    if seed != -1:
-        set_seed(seed)
-    else:
-        torch.seed()
+        if config.model.cross_attention_dim == 768:
+            whisper_model_path = "checkpoints/whisper/small.pt"
+        elif config.model.cross_attention_dim == 384:
+            whisper_model_path = "checkpoints/whisper/tiny.pt"
+        else:
+            raise NotImplementedError("cross_attention_dim must be 768 or 384")
 
-    print(f"Initial seed: {torch.initial_seed()}")
+        audio_encoder = Audio2Feature(model_path=whisper_model_path, device="cuda", num_frames=config.data.num_frames)
 
-    unique_id = str(uuid.uuid4())
-    video_out_path = f"video_out{unique_id}.mp4"
+        vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse", torch_dtype=torch.float16)
+        vae.config.scaling_factor = 0.18215
+        vae.config.shift_factor = 0
 
-    pipeline(
-        video_path=video_path,
-        audio_path=audio_path,
-        video_out_path=video_out_path,
-        video_mask_path=video_out_path.replace(".mp4", "_mask.mp4"),
-        num_frames=config.data.num_frames,
-        num_inference_steps=config.run.inference_steps,
-        guidance_scale=1.0,
-        weight_dtype=torch.float16,
-        width=config.data.resolution,
-        height=config.data.resolution,
-    )
+        unet, _ = UNet3DConditionModel.from_pretrained(
+            OmegaConf.to_container(config.model),
+            inference_ckpt_path,  # load checkpoint
+            device="cpu",
+        )
 
-    return video_out_path
+        unet = unet.to(dtype=torch.float16)
+
+        # Enable xformers for better performance on A100
+        if is_xformers_available():
+            # Patch for custom UNet model signature mismatch
+            patched_modules = []
+            for name, module in unet.named_modules():
+                if hasattr(module, "set_use_memory_efficient_attention_xformers"):
+                    # Store original method for this specific instance
+                    original_method = module.set_use_memory_efficient_attention_xformers
+                    
+                    # Create a wrapper that handles extra arguments for this instance
+                    def create_patched_method(orig_method):
+                        def patched_method(valid, attention_op=None):
+                            return orig_method(valid)
+                        return patched_method
+                    
+                    # Replace the method on this specific instance
+                    module.set_use_memory_efficient_attention_xformers = create_patched_method(original_method)
+                    patched_modules.append(name)
+            
+            try:
+                unet.enable_xformers_memory_efficient_attention()
+                print(f"✅ xformers memory efficient attention enabled with custom patch on {len(patched_modules)} modules")
+            except Exception as e:
+                print(f"Failed to enable xformers: {e}")
+                print("Continuing without xformers - performance may be slower")
+        else:
+            print("xformers not available - install with: pip install xformers")
+
+        pipeline = LipsyncPipeline(
+            vae=vae,
+            audio_encoder=audio_encoder,
+            unet=unet,
+            scheduler=scheduler,
+        ).to("cuda")
+
+        seed = -1
+        if seed != -1:
+            set_seed(seed)
+        else:
+            torch.seed()
+
+        print(f"Initial seed: {torch.initial_seed()}")
+
+        unique_id = str(uuid.uuid4())
+        video_out_path = f"video_out{unique_id}.mp4"
+
+        pipeline(
+            video_path=video_path,
+            audio_path=audio_path,
+            video_out_path=video_out_path,
+            video_mask_path=video_out_path.replace(".mp4", "_mask.mp4"),
+            num_frames=config.data.num_frames,
+            num_inference_steps=config.run.inference_steps,
+            guidance_scale=1.0,
+            weight_dtype=torch.float16,
+            width=config.data.resolution,
+            height=config.data.resolution,
+        )
+
+        return video_out_path
+    
+    except Exception as e:
+        print(f"Error during processing: {e}")
+        raise e
+    
+    finally:
+        # Clean up temporary directory
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+            print(f"Cleaned up temporary directory: {temp_dir}")
 
 
 css="""
