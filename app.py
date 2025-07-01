@@ -79,6 +79,8 @@ from accelerate.utils import set_seed
 from latentsync.whisper.audio2feature import Audio2Feature
 import latentsync.utils.util as ls_util
 import latentsync.pipelines.lipsync_pipeline as ls_pipe
+import latentsync.whisper.whisper.audio as wa
+import numpy as np
 
 orig_read_video = ls_util.read_video
 
@@ -87,6 +89,17 @@ def _read_video_no_change(video_path: str, change_fps=True, use_decord=True):
 
 ls_util.read_video = _read_video_no_change
 ls_pipe.read_video = _read_video_no_change
+
+# Patch mel_filters to allow_pickle
+_orig_mel_filters = wa.mel_filters
+
+def _patched_mel_filters(device, n_mels=80):
+    assert n_mels == 80
+    with np.load(os.path.join(os.path.dirname(wa.__file__), "assets", "mel_filters.npz"), allow_pickle=True) as f:
+        return torch.from_numpy(f[f"mel_{n_mels}"]).to(device)
+
+wa.mel_filters.cache_clear()
+wa.mel_filters = _patched_mel_filters
 
 def main(video_path, audio_path, progress=gr.Progress(track_tqdm=True)):
     """
